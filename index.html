@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DarkBear Lab - Game Portal</title>
+    <style>
+        body {
+            background-color: #1a1a1a;
+            color: #eee;
+            font-family: 'Courier New', Courier, monospace;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin: 0;
+            padding: 20px;
+        }
+        h1 {
+            border-bottom: 2px solid #0f0;
+            padding-bottom: 10px;
+            color: #0f0;
+            text-shadow: 0 0 5px rgba(0, 255, 0, 0.5);
+        }
+        #project-list {
+            width: 100%;
+            max-width: 600px;
+            display: grid;
+            gap: 15px;
+        }
+        .game-card {
+            background: #2a2a2a;
+            border: 1px solid #444;
+            padding: 15px;
+            border-radius: 4px;
+            text-decoration: none;
+            color: inherit;
+            transition: all 0.2s;
+            display: block; /* 讓整個卡片可點擊 */
+        }
+        .game-card:hover {
+            border-color: #0f0;
+            transform: translateX(5px);
+            background: #333;
+            box-shadow: 0 0 10px rgba(0, 255, 0, 0.2);
+        }
+        .game-title {
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #0f0;
+            margin-bottom: 5px;
+        }
+        .game-desc {
+            font-size: 0.9em;
+            color: #aaa;
+        }
+        .loading { text-align: center; color: #888; margin-top: 20px; }
+    </style>
+</head>
+<body>
+
+    <h1>DARKBEAR LAB</h1>
+    <p>Select a simulation to start:</p>
+
+    <div id="project-list">
+        <div class="loading">正在掃描 GitHub 倉庫...</div>
+    </div>
+
+    <script>
+        const USERNAME = 'darkbearlab'; // 您的帳號
+        
+        // 這裡填入您想要「排除」顯示的倉庫名稱 (例如這個首頁倉庫本身)
+        const IGNORE_LIST = ['darkbearlab.github.io']; 
+
+        async function fetchProjects() {
+            const list = document.getElementById('project-list');
+            try {
+                // 呼叫 GitHub API 抓您的公開專案
+                const response = await fetch(`https://api.github.com/users/${USERNAME}/repos?sort=updated`);
+                const repos = await response.json();
+
+                list.innerHTML = ''; // 清空 Loading
+
+                repos.forEach(repo => {
+                    // 過濾掉不想顯示的
+                    if (IGNORE_LIST.includes(repo.name)) return;
+                    
+                    // 只有當這個倉庫有開啟 GitHub Pages 時才顯示 (或者您想全部顯示也可以)
+                    // 這裡我們簡單判斷：只要有 description 我們就當作它是個專案
+                    
+                    const card = document.createElement('a');
+                    card.className = 'game-card';
+                    
+                    // 預設連結到該專案的 GitHub Pages 網址
+                    // 格式通常是: https://帳號.github.io/專案名/
+                    card.href = `https://${USERNAME}.github.io/${repo.name}/`;
+                    
+                    // 如果您想讓它連回程式碼倉庫，就改用 repo.html_url
+                    
+                    const title = document.createElement('div');
+                    title.className = 'game-title';
+                    title.innerText = `> ${repo.name.toUpperCase()}`; // 轉大寫比較帥
+
+                    const desc = document.createElement('div');
+                    desc.className = 'game-desc';
+                    desc.innerText = repo.description || "機密專案 (無描述)";
+
+                    card.appendChild(title);
+                    card.appendChild(desc);
+                    list.appendChild(card);
+                });
+
+            } catch (err) {
+                list.innerHTML = `<div style="color:red">連線失敗: ${err.message}</div>`;
+            }
+        }
+
+        fetchProjects();
+    </script>
+</body>
+</html>
