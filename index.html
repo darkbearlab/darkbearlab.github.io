@@ -77,7 +77,7 @@
         <tbody id="file-list">
             <tr>
                 <td>[DIR]</td>
-                <td><a href="https://github.com/darkbearlab">../ (Parent Directory)</a></td>
+                <td><a href="https://github.com/darkbearlab" target="_blank">../ (Parent Directory)</a></td>
                 <td>-</td>
                 <td>-</td>
             </tr>
@@ -109,7 +109,7 @@
                 let html = `
                     <tr>
                         <td>[DIR]</td>
-                        <td><a href="https://github.com/${USERNAME}">../</a></td>
+                        <td><a href="https://github.com/${USERNAME}" target="_blank">../</a></td>
                         <td>-</td>
                         <td>-</td>
                     </tr>
@@ -129,7 +129,7 @@
                     html += `
                         <tr>
                             <td class="icon">[DIR]</td>
-                            <td><a href="${link}">${repo.name}/</a></td>
+                            <td><a href="${link}" target="_blank">${repo.name}/</a></td>
                             <td style="white-space: nowrap;">${dateStr}</td>
                             <td class="size-col">${repo.description ? repo.description : '-'}</td>
                         </tr>
