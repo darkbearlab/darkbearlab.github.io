@@ -1,0 +1,21 @@
+name: publish-rules-site
+on:
+  push:
+    branches:
+      - main  # 確認您的主要分支是叫 main 還是 master
+
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: 3.x
+      # 關鍵：安裝主題和外掛
+      - run: pip install mkdocs-material mkdocs-static-i18n
+      # 關鍵：編譯並推送到 gh-pages 分支
+      - run: mkdocs gh-deploy --force
