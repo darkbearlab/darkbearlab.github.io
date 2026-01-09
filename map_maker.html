@@ -1,0 +1,1041 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>戰棋地圖編輯器 v6 (最終版)</title>
+    <style>
+        :root {
+            --bg-color: #2c3e50;
+            --panel-bg: #ffffff;
+            --text-color: #333;
+            --accent: #2980b9;
+            --danger: #c0392b;
+            --border: #bdc3c7;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            display: flex;
+            height: 100vh;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            overflow: hidden;
+            user-select: none;
+        }
+
+        /* 左側控制面板 */
+        #sidebar {
+            width: 300px;
+            background: var(--panel-bg);
+            padding: 15px;
+            box-shadow: 2px 0 10px rgba(0,0,0,0.3);
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            overflow-y: auto;
+            z-index: 10;
+        }
+
+        h2 { margin: 0 0 5px 0; font-size: 1.2rem; border-bottom: 3px solid var(--accent); padding-bottom: 5px; color: #2c3e50; }
+        
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            margin-bottom: 5px;
+        }
+
+        label { font-size: 0.85rem; font-weight: 700; color: #555; display: flex; align-items: center; justify-content: space-between;}
+        
+        input[type="number"], select {
+            padding: 6px;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        .radio-group { display: flex; gap: 15px; font-weight: normal;}
+        .checkbox-label { font-weight: normal; display: flex; align-items: center; gap: 8px; cursor: pointer; }
+
+        /* 顏色與樣式區 */
+        .color-row { display: flex; align-items: center; gap: 10px; }
+        input[type="color"] { width: 40px; height: 35px; border: none; cursor: pointer; padding: 0; background: none;}
+        
+        #recentColors { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
+        .color-swatch { width: 22px; height: 22px; border-radius: 3px; cursor: pointer; border: 1px solid #ccc; }
+        .color-swatch:hover { transform: scale(1.2); border-color: #333; }
+
+        /* 按鈕 */
+        .tool-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 5px; }
+        button {
+            padding: 8px;
+            background-color: #ecf0f1;
+            color: #333;
+            border: 1px solid #bdc3c7;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 0.85rem;
+            transition: all 0.2s;
+        }
+        button:hover { background-color: #dfe6e9; }
+        
+        button.active { background-color: var(--accent); color: white; border-color: var(--accent); }
+        button.active-danger { background-color: var(--danger); color: white; border-color: var(--danger); }
+        
+        button.action-btn { background-color: #34495e; color: white; width: 100%; margin-top: 5px; padding: 10px;}
+        button.action-btn:hover { background-color: #2c3e50; }
+        button.danger-btn { background-color: #e74c3c; color: white; width: 100%; }
+
+        .sub-panel {
+            background: #f4f6f7; 
+            padding: 10px; 
+            border-radius: 6px; 
+            border: 1px solid #e0e0e0;
+            font-size: 0.9em;
+        }
+
+        /* 摺疊選單樣式 */
+        details {
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 5px;
+            background-color: #f9f9f9;
+            margin-top: 10px;
+        }
+        summary {
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 0.85rem;
+            color: #555;
+            padding: 5px;
+        }
+        details[open] summary {
+            border-bottom: 1px solid #ddd;
+            margin-bottom: 10px;
+        }
+        .file-btn-group {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 5px;
+            margin-bottom: 5px;
+        }
+
+        /* 畫布 */
+        #canvas-container {
+            flex-grow: 1;
+            position: relative;
+            background-color: #888;
+            overflow: hidden;
+            cursor: default;
+            background-image: 
+                linear-gradient(45deg, rgba(0,0,0,0.05) 25%, transparent 25%), 
+                linear-gradient(-45deg, rgba(0,0,0,0.05) 25%, transparent 25%), 
+                linear-gradient(45deg, transparent 75%, rgba(0,0,0,0.05) 75%), 
+                linear-gradient(-45deg, transparent 75%, rgba(0,0,0,0.05) 75%);
+            background-size: 20px 20px;
+            background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+        }
+
+        canvas { display: block; }
+
+        #status-bar {
+            position: fixed;
+            bottom: 15px;
+            right: 20px;
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            pointer-events: none;
+            backdrop-filter: blur(2px);
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+    </style>
+</head>
+<body>
+
+    <div id="sidebar">
+        <h2>地圖編輯器 v6</h2>
+        
+        <div class="control-group">
+            <label>編輯背景色 (不匯出)</label>
+            <div class="color-row">
+                <input type="color" id="bgInput" value="#95a5a6">
+                <span style="font-size:0.8rem; color:#666;">調整編輯視圖底色</span>
+            </div>
+        </div>
+
+        <hr style="border-top:1px dashed #ccc; width:100%;">
+
+        <div class="control-group">
+            <label>網格設定</label>
+            <div class="radio-group">
+                <label class="checkbox-label"><input type="radio" name="gridType" value="hex" checked> 六角形</label>
+                <label class="checkbox-label"><input type="radio" name="gridType" value="square"> 方形</label>
+            </div>
+            <div style="display:flex; gap:5px; margin-top:5px;">
+                <input type="number" id="gridSizeMm" value="25" min="10" max="100" placeholder="尺寸mm">
+                <span style="font-size:0.8rem; line-height:30px;">mm</span>
+            </div>
+            <div style="display:flex; gap:5px; margin-top:5px;">
+                <input type="number" id="mapRows" value="20" placeholder="Rows">
+                <span style="font-size:0.8rem; line-height:30px;">x</span>
+                <input type="number" id="mapCols" value="20" placeholder="Cols">
+            </div>
+        </div>
+
+        <hr style="border-top:1px dashed #ccc; width:100%;">
+
+        <div class="control-group">
+            <label>工具箱</label>
+            <div class="tool-grid">
+                <button id="btnToolFill" class="active">填色</button>
+                <button id="btnToolLine">連線</button>
+                <button id="btnToolEraser">橡皮擦</button>
+            </div>
+        </div>
+
+        <div id="lineSettings" class="sub-panel" style="display:none;">
+            <label style="color:var(--accent); margin-bottom:5px;">連線樣式</label>
+            <div class="control-group">
+                <label>粗細 (px) & 樣式</label>
+                <div style="display:flex; gap:5px;">
+                    <input type="number" id="lineWidth" value="3" min="1" max="20" style="width:60px;">
+                    <select id="lineStyle">
+                        <option value="solid">實線</option>
+                        <option value="dashed">虛線</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div class="control-group" id="colorGroup">
+            <label>顏色選擇</label>
+            <div class="color-row">
+                <input type="color" id="colorInput" value="#e74c3c">
+                <span id="colorHex" style="font-family:monospace;">#E74C3C</span>
+            </div>
+            <div id="recentColors"></div>
+        </div>
+
+        <div class="control-group">
+            <label class="checkbox-label">
+                <input type="checkbox" id="showNodes" checked> 顯示白色節點
+            </label>
+        </div>
+
+        <hr style="border-top:1px solid #eee; width:100%; margin-top:auto;">
+        
+        <div class="control-group">
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:5px;">
+                <label class="checkbox-label" title="匯出時是否包含基礎網格線">
+                    <input type="checkbox" id="exportGridLines"> 匯出格線
+                </label>
+                <input type="color" id="exportGridColor" value="#000000" title="選擇匯出格線的顏色" style="width:30px; height:25px; border:1px solid #ccc;">
+            </div>
+            
+            <button id="btnExport" class="action-btn">匯出 PNG</button>
+            <button id="btnClear" class="danger-btn" style="margin-top:5px; padding:8px; font-size:0.8rem;">清空畫布</button>
+        </div>
+
+        <details>
+            <summary>進階：存取與管理</summary>
+            
+            <div class="control-group">
+                <label>地圖專案 (.json)</label>
+                <div class="file-btn-group">
+                    <button id="btnSaveProject">儲存專案</button>
+                    <button id="btnLoadProject">讀取專案</button>
+                </div>
+            </div>
+
+            <div class="control-group">
+                <label>常用調色盤 (.json)</label>
+                <div class="file-btn-group">
+                    <button id="btnSavePalette">儲存色盤</button>
+                    <button id="btnLoadPalette">讀取色盤</button>
+                </div>
+            </div>
+
+            <input type="file" id="fileInputProject" accept=".json" style="display:none">
+            <input type="file" id="fileInputPalette" accept=".json" style="display:none">
+        </details>
+
+    </div>
+
+    <div id="canvas-container">
+        <canvas id="mapCanvas"></canvas>
+    </div>
+
+    <div id="status-bar">準備就緒</div>
+
+    <script>
+        // --- 核心變數 ---
+        const canvas = document.getElementById('mapCanvas');
+        const ctx = canvas.getContext('2d');
+        const container = document.getElementById('canvas-container');
+
+        // 設定
+        let config = {
+            gridType: 'hex',
+            sizeMm: 25,
+            rows: 20,
+            cols: 20,
+            dpi: 96,
+        };
+
+        const MM_TO_PX = config.dpi / 25.4;
+
+        // 視圖
+        let view = {
+            scale: 1.0,
+            offsetX: 50,
+            offsetY: 50,
+            isPanning: false,
+            lastMouseX: 0,
+            lastMouseY: 0
+        };
+
+        // 繪圖狀態
+        let drawState = {
+            tool: 'fill', 
+            color: '#e74c3c',
+            lineWidth: 3,
+            lineStyle: 'solid',
+            recentColors: ['#e74c3c', '#3498db', '#2ecc71', '#f1c40f', '#8e44ad'],
+            selectedNodeKey: null, 
+            hoverNodeKey: null,
+            isDrawing: false,
+            lastDraggedCellKey: null
+        };
+
+        // 資料模型
+        let data = {
+            filled: {}, 
+            lines: []
+        };
+
+        // 圖形結構
+        let gridGraph = { adj: {}, nodes: {} };
+
+        // --- DOM ---
+        const ui = {
+            inputs: {
+                gridType: document.getElementsByName('gridType'),
+                sizeMm: document.getElementById('gridSizeMm'),
+                rows: document.getElementById('mapRows'),
+                cols: document.getElementById('mapCols'),
+                showNodes: document.getElementById('showNodes'),
+                color: document.getElementById('colorInput'),
+                width: document.getElementById('lineWidth'),
+                style: document.getElementById('lineStyle'),
+                bg: document.getElementById('bgInput'),
+                exportGrid: document.getElementById('exportGridLines'),
+                exportGridColor: document.getElementById('exportGridColor')
+            },
+            btns: {
+                fill: document.getElementById('btnToolFill'),
+                line: document.getElementById('btnToolLine'),
+                eraser: document.getElementById('btnToolEraser'),
+                export: document.getElementById('btnExport'),
+                clear: document.getElementById('btnClear'),
+                // Save/Load
+                saveProj: document.getElementById('btnSaveProject'),
+                loadProj: document.getElementById('btnLoadProject'),
+                savePal: document.getElementById('btnSavePalette'),
+                loadPal: document.getElementById('btnLoadPalette')
+            },
+            files: {
+                project: document.getElementById('fileInputProject'),
+                palette: document.getElementById('fileInputPalette')
+            },
+            panels: {
+                lineSettings: document.getElementById('lineSettings'),
+                recentColors: document.getElementById('recentColors'),
+                status: document.getElementById('status-bar'),
+                colorGroup: document.getElementById('colorGroup')
+            }
+        };
+
+        // --- 初始化 ---
+        function init() {
+            window.addEventListener('resize', resizeCanvas);
+            resizeCanvas();
+            renderRecentColors();
+            bindEvents();
+            rebuildGraph();
+            container.style.backgroundColor = ui.inputs.bg.value;
+            draw();
+        }
+
+        function resizeCanvas() {
+            canvas.width = container.clientWidth;
+            canvas.height = container.clientHeight;
+            draw();
+        }
+
+        // --- 數學與幾何 ---
+        function getWorldPos(e) {
+            const rect = canvas.getBoundingClientRect();
+            const mx = e.clientX - rect.left;
+            const my = e.clientY - rect.top;
+            return {
+                x: (mx - view.offsetX) / view.scale,
+                y: (my - view.offsetY) / view.scale,
+                mx, my 
+            };
+        }
+
+        function getGridParams() {
+            const pxSize = config.sizeMm * MM_TO_PX;
+            if (config.gridType === 'hex') {
+                const w = pxSize;
+                const size = w / Math.sqrt(3);
+                const h = 2 * size;
+                const xStep = w;
+                const yStep = h * 0.75;
+                return { w, h, size, xStep, yStep, type: 'hex' };
+            } else {
+                return { size: pxSize, type: 'square' };
+            }
+        }
+
+        function getCellPoly(r, c, params) {
+            const points = [];
+            if (params.type === 'square') {
+                const s = params.size;
+                const x = c * s;
+                const y = r * s;
+                points.push({x: x, y: y});
+                points.push({x: x + s, y: y});
+                points.push({x: x + s, y: y + s});
+                points.push({x: x, y: y + s});
+            } else {
+                const { w, h, size, xStep, yStep } = params;
+                const cx = (c * w) + ((r % 2) * (w / 2)) + (w / 2);
+                const cy = (r * yStep) + (h / 2);
+                for (let i = 0; i < 6; i++) {
+                    const rad = (Math.PI / 180) * (60 * i - 30);
+                    points.push({
+                        x: cx + size * Math.cos(rad),
+                        y: cy + size * Math.sin(rad)
+                    });
+                }
+            }
+            return points;
+        }
+
+        function distToSegmentSquared(p, v, w) {
+            const l2 = (v.x - w.x)**2 + (v.y - w.y)**2;
+            if (l2 == 0) return (p.x - v.x)**2 + (p.y - v.y)**2;
+            let t = ((p.x - v.x) * (w.x - v.x) + (p.y - v.y) * (w.y - v.y)) / l2;
+            t = Math.max(0, Math.min(1, t));
+            return (p.x - (v.x + t * (w.x - v.x)))**2 + 
+                   (p.y - (v.y + t * (w.y - v.y)))**2;
+        }
+
+        function isPointInPoly(x, y, points) {
+            let inside = false;
+            for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
+                const xi = points[i].x, yi = points[i].y;
+                const xj = points[j].x, yj = points[j].y;
+                const intersect = ((yi > y) != (yj > y)) &&
+                    (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
+                if (intersect) inside = !inside;
+            }
+            return inside;
+        }
+
+        // --- 圖形路徑搜尋 ---
+        function rebuildGraph() {
+            gridGraph.adj = {};
+            gridGraph.nodes = {};
+            const params = getGridParams();
+            const toKey = (x, y) => `${x.toFixed(1)}_${y.toFixed(1)}`;
+
+            for(let r=0; r<config.rows; r++) {
+                for(let c=0; c<config.cols; c++) {
+                    const points = getCellPoly(r, c, params);
+                    const len = points.length;
+                    for(let i=0; i<len; i++) {
+                        const p1 = points[i];
+                        const p2 = points[(i+1) % len];
+                        const k1 = toKey(p1.x, p1.y);
+                        const k2 = toKey(p2.x, p2.y);
+                        
+                        if(!gridGraph.nodes[k1]) gridGraph.nodes[k1] = p1;
+                        if(!gridGraph.nodes[k2]) gridGraph.nodes[k2] = p2;
+                        if(!gridGraph.adj[k1]) gridGraph.adj[k1] = new Set();
+                        if(!gridGraph.adj[k2]) gridGraph.adj[k2] = new Set();
+                        
+                        gridGraph.adj[k1].add(k2);
+                        gridGraph.adj[k2].add(k1);
+                    }
+                }
+            }
+            for(let k in gridGraph.adj) gridGraph.adj[k] = Array.from(gridGraph.adj[k]);
+        }
+
+        function findShortestPath(startKey, endKey) {
+            if (!gridGraph.adj[startKey] || !gridGraph.adj[endKey]) return null;
+            if (startKey === endKey) return [gridGraph.nodes[startKey]];
+
+            let queue = [[startKey]];
+            let visited = new Set([startKey]);
+            let maxSteps = 10000;
+            let steps = 0;
+            const endNode = gridGraph.nodes[endKey];
+
+            while (queue.length > 0 && steps < maxSteps) {
+                let path = queue.shift();
+                let currentKey = path[path.length - 1];
+                steps++;
+
+                if (currentKey === endKey) return path.map(k => gridGraph.nodes[k]);
+
+                let neighbors = gridGraph.adj[currentKey];
+                neighbors.sort((a, b) => {
+                    const na = gridGraph.nodes[a];
+                    const nb = gridGraph.nodes[b];
+                    return Math.hypot(na.x - endNode.x, na.y - endNode.y) - 
+                           Math.hypot(nb.x - endNode.x, nb.y - endNode.y);
+                });
+
+                for (let neighbor of neighbors) {
+                    if (!visited.has(neighbor)) {
+                        visited.add(neighbor);
+                        queue.push([...path, neighbor]);
+                    }
+                }
+            }
+            return null;
+        }
+
+        // --- 繪圖功能 ---
+        function drawBaseGrid(context, params) {
+            context.beginPath();
+            for(let r=0; r<config.rows; r++) {
+                for(let c=0; c<config.cols; c++) {
+                    const points = getCellPoly(r, c, params);
+                    context.moveTo(points[0].x, points[0].y);
+                    for(let i=1; i<points.length; i++) context.lineTo(points[i].x, points[i].y);
+                    context.lineTo(points[0].x, points[0].y);
+                }
+            }
+            context.stroke();
+        }
+
+        function draw() {
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            ctx.translate(view.offsetX, view.offsetY);
+            ctx.scale(view.scale, view.scale);
+
+            const params = getGridParams();
+
+            // 1. 填色
+            for (let key in data.filled) {
+                const [r, c] = key.split(',').map(Number);
+                const points = getCellPoly(r, c, params);
+                ctx.fillStyle = data.filled[key];
+                ctx.beginPath();
+                ctx.moveTo(points[0].x, points[0].y);
+                for(let i=1; i<points.length; i++) ctx.lineTo(points[i].x, points[i].y);
+                ctx.closePath();
+                ctx.fill();
+            }
+
+            // 2. 編輯時的網格 (淡灰)
+            ctx.strokeStyle = 'rgba(0,0,0,0.1)';
+            ctx.lineWidth = 1 / view.scale;
+            drawBaseGrid(ctx, params);
+
+            // 3. 線條
+            data.lines.forEach(line => {
+                if(line.path && line.path.length > 1) {
+                    ctx.beginPath();
+                    ctx.strokeStyle = line.color;
+                    ctx.lineWidth = line.width;
+                    ctx.lineCap = 'round';
+                    ctx.lineJoin = 'round';
+                    if (line.style === 'dashed') {
+                        const dashLen = line.width * 3;
+                        const gapLen = line.width * 2; 
+                        ctx.setLineDash([dashLen, gapLen]);
+                    } else {
+                        ctx.setLineDash([]);
+                    }
+                    ctx.moveTo(line.path[0].x, line.path[0].y);
+                    for(let i=1; i<line.path.length; i++) ctx.lineTo(line.path[i].x, line.path[i].y);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                }
+            });
+
+            // 4. 節點
+            if (ui.inputs.showNodes.checked) {
+                ctx.fillStyle = '#fff';
+                const nodeRadius = 3 / view.scale;
+                for(let k in gridGraph.nodes) {
+                    const p = gridGraph.nodes[k];
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, nodeRadius, 0, Math.PI*2);
+                    ctx.fill();
+                }
+            }
+
+            // 5. 互動預覽
+            if (drawState.selectedNodeKey) {
+                const p = gridGraph.nodes[drawState.selectedNodeKey];
+                ctx.fillStyle = '#f1c40f';
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, 6 / view.scale, 0, Math.PI*2);
+                ctx.fill();
+            }
+
+            if (drawState.tool === 'line' && drawState.selectedNodeKey && drawState.hoverNodeKey) {
+                const path = findShortestPath(drawState.selectedNodeKey, drawState.hoverNodeKey);
+                if (path) {
+                    ctx.beginPath();
+                    ctx.strokeStyle = drawState.color;
+                    ctx.lineWidth = drawState.lineWidth;
+                    ctx.globalAlpha = 0.5;
+                    if (drawState.lineStyle === 'dashed') {
+                        ctx.setLineDash([drawState.lineWidth * 3, drawState.lineWidth * 2]);
+                    }
+                    ctx.moveTo(path[0].x, path[0].y);
+                    for(let i=1; i<path.length; i++) ctx.lineTo(path[i].x, path[i].y);
+                    ctx.stroke();
+                    ctx.globalAlpha = 1.0;
+                    ctx.setLineDash([]);
+                }
+            }
+        }
+
+        // --- 互動邏輯 ---
+        function setTool(t) {
+            drawState.tool = t;
+            ui.btns.fill.className = t === 'fill' ? 'active' : '';
+            ui.btns.line.className = t === 'line' ? 'active' : '';
+            ui.btns.eraser.className = t === 'eraser' ? 'active-danger' : '';
+            
+            ui.panels.lineSettings.style.display = t === 'line' ? 'block' : 'none';
+            ui.panels.colorGroup.style.opacity = t === 'eraser' ? '0.3' : '1';
+            ui.panels.colorGroup.style.pointerEvents = t === 'eraser' ? 'none' : 'auto';
+
+            drawState.selectedNodeKey = null;
+            
+            let msg = "";
+            if(t === 'fill') msg = "模式：填色 (點擊或拖曳填色)";
+            else if(t === 'line') msg = "模式：連線 (點擊起點 -> 終點)";
+            else if(t === 'eraser') msg = "模式：橡皮擦 (點擊線段切斷或移除，點擊格子清除)";
+            
+            ui.panels.status.innerText = msg;
+            if(t === 'eraser') container.style.cursor = 'not-allowed';
+            else container.style.cursor = 'default';
+            draw();
+        }
+
+        function handleToolAction(wx, wy, isDraggingFlag = false) {
+            const params = getGridParams();
+
+            // Eraser
+            if (drawState.tool === 'eraser' && !isDraggingFlag) {
+                let changed = false;
+                const clickThreshold = Math.max(5, 5 / view.scale);
+                
+                for (let i = data.lines.length - 1; i >= 0; i--) {
+                    const line = data.lines[i];
+                    let hitSegmentIndex = -1;
+                    const effectiveWidth = Math.max(line.width, clickThreshold * 2);
+
+                    for(let j=0; j<line.path.length-1; j++) {
+                        const distSq = distToSegmentSquared({x:wx, y:wy}, line.path[j], line.path[j+1]);
+                        if (distSq < (effectiveWidth/2)**2) {
+                            hitSegmentIndex = j;
+                            break;
+                        }
+                    }
+
+                    if (hitSegmentIndex !== -1) {
+                        const path = line.path;
+                        const part1 = path.slice(0, hitSegmentIndex + 1);
+                        const part2 = path.slice(hitSegmentIndex + 1);
+                        data.lines.splice(i, 1);
+                        if (part1.length >= 2) data.lines.push({ ...line, path: part1 });
+                        if (part2.length >= 2) data.lines.push({ ...line, path: part2 });
+                        changed = true;
+                        ui.panels.status.innerText = "已切斷/移除線段";
+                        break; 
+                    }
+                }
+
+                if (!changed) {
+                    for(let r=0; r<config.rows; r++) {
+                        for(let c=0; c<config.cols; c++) {
+                            const poly = getCellPoly(r, c, params);
+                            if (isPointInPoly(wx, wy, poly)) {
+                                const key = `${r},${c}`;
+                                if (data.filled[key]) {
+                                    delete data.filled[key];
+                                    changed = true;
+                                    ui.panels.status.innerText = "已移除填色";
+                                }
+                                break;
+                            }
+                        }
+                        if(changed) break;
+                    }
+                }
+                if(changed) draw();
+                return;
+            }
+
+            // Fill (Drag supported)
+            if (drawState.tool === 'fill') {
+                for(let r=0; r<config.rows; r++) {
+                    for(let c=0; c<config.cols; c++) {
+                        const poly = getCellPoly(r, c, params);
+                        if (isPointInPoly(wx, wy, poly)) {
+                            const key = `${r},${c}`;
+                            if (isDraggingFlag && key === drawState.lastDraggedCellKey) return;
+                            if (isDraggingFlag) drawState.lastDraggedCellKey = key;
+
+                            if (!isDraggingFlag && data.filled[key] === drawState.color) {
+                                delete data.filled[key];
+                            } else {
+                                data.filled[key] = drawState.color;
+                            }
+                            draw();
+                            return;
+                        }
+                    }
+                }
+            }
+
+            // Line
+            if (drawState.tool === 'line' && !isDraggingFlag) {
+                const nearest = findNearestNode(wx, wy);
+                if (!nearest) return;
+
+                if (!drawState.selectedNodeKey) {
+                    drawState.selectedNodeKey = nearest.key;
+                    ui.panels.status.innerText = "已選起點，請點擊終點";
+                    draw();
+                } else {
+                    const path = findShortestPath(drawState.selectedNodeKey, nearest.key);
+                    if (path) {
+                        data.lines.push({
+                            path: path,
+                            color: drawState.color,
+                            width: drawState.lineWidth,
+                            style: drawState.lineStyle
+                        });
+                        drawState.selectedNodeKey = null;
+                        ui.panels.status.innerText = "連線完成";
+                        draw();
+                    }
+                }
+            }
+        }
+
+        function findNearestNode(wx, wy) {
+            let minD = Infinity;
+            let targetKey = null;
+            const threshold = config.sizeMm * MM_TO_PX * 0.5;
+            for(let key in gridGraph.nodes) {
+                const n = gridGraph.nodes[key];
+                const d = Math.hypot(n.x - wx, n.y - wy);
+                if (d < threshold && d < minD) {
+                    minD = d;
+                    targetKey = key;
+                }
+            }
+            return targetKey ? { key: targetKey, ...gridGraph.nodes[targetKey] } : null;
+        }
+
+        // --- 匯出與存檔 ---
+
+        function exportImage() {
+            const params = getGridParams();
+            let maxX = 0, maxY = 0;
+            if(config.gridType === 'square') {
+                maxX = config.cols * params.size;
+                maxY = config.rows * params.size;
+            } else {
+                maxX = config.cols * params.xStep + params.w; 
+                maxY = config.rows * params.yStep + params.h;
+            }
+            maxX += 20; maxY += 40;
+
+            const exCanvas = document.createElement('canvas');
+            exCanvas.width = maxX;
+            exCanvas.height = maxY;
+            const exCtx = exCanvas.getContext('2d');
+
+            for (let key in data.filled) {
+                const [r, c] = key.split(',').map(Number);
+                const points = getCellPoly(r, c, params);
+                exCtx.fillStyle = data.filled[key];
+                exCtx.beginPath();
+                exCtx.moveTo(points[0].x, points[0].y);
+                for(let i=1; i<points.length; i++) exCtx.lineTo(points[i].x, points[i].y);
+                exCtx.closePath();
+                exCtx.fill();
+            }
+
+            if (ui.inputs.exportGrid.checked) {
+                exCtx.strokeStyle = ui.inputs.exportGridColor.value; // 使用者選擇的顏色
+                exCtx.lineWidth = 1;
+                drawBaseGrid(exCtx, params);
+            }
+
+            data.lines.forEach(line => {
+                if(line.path && line.path.length > 1) {
+                    exCtx.beginPath();
+                    exCtx.strokeStyle = line.color;
+                    exCtx.lineWidth = line.width;
+                    exCtx.lineCap = 'round';
+                    exCtx.lineJoin = 'round';
+                    if (line.style === 'dashed') {
+                        exCtx.setLineDash([line.width * 3, line.width * 2]);
+                    }
+                    exCtx.moveTo(line.path[0].x, line.path[0].y);
+                    for(let i=1; i<line.path.length; i++) exCtx.lineTo(line.path[i].x, line.path[i].y);
+                    exCtx.stroke();
+                    exCtx.setLineDash([]);
+                }
+            });
+
+            exCtx.font = "14px sans-serif";
+            exCtx.fillStyle = "black";
+            exCtx.textAlign = "left";
+            exCtx.textBaseline = "bottom";
+            const infoText = `Grid Size: ${config.sizeMm}mm | Print @ 96 DPI for 1:1 scale`;
+            exCtx.fillText(infoText, 10, maxY - 10);
+
+            const link = document.createElement('a');
+            link.download = `map_export_${Date.now()}.png`;
+            link.href = exCanvas.toDataURL('image/png');
+            link.click();
+        }
+
+        // --- 存取功能 ---
+
+        function downloadJSON(obj, filename) {
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(obj));
+            const link = document.createElement('a');
+            link.setAttribute("href", dataStr);
+            link.setAttribute("download", filename);
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+        }
+
+        function saveProject() {
+            const projectData = {
+                version: 'v6',
+                timestamp: Date.now(),
+                config: config,
+                data: data,
+                recentColors: drawState.recentColors
+            };
+            downloadJSON(projectData, `map_project_${Date.now()}.json`);
+        }
+
+        function savePalette() {
+            downloadJSON(drawState.recentColors, `map_palette_${Date.now()}.json`);
+        }
+
+        function loadProject(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+                try {
+                    const loaded = JSON.parse(evt.target.result);
+                    // 恢復資料
+                    config = loaded.config || config;
+                    data = loaded.data || { filled: {}, lines: [] };
+                    drawState.recentColors = loaded.recentColors || drawState.recentColors;
+
+                    // 更新 UI 輸入項以符合設定
+                    ui.inputs.sizeMm.value = config.sizeMm;
+                    ui.inputs.rows.value = config.rows;
+                    ui.inputs.cols.value = config.cols;
+                    ui.inputs.gridType.forEach(r => r.checked = (r.value === config.gridType));
+
+                    // 重建並繪製
+                    rebuildGraph();
+                    renderRecentColors();
+                    draw();
+                    alert("專案讀取成功！");
+                } catch(err) {
+                    alert("讀取失敗：檔案格式錯誤");
+                    console.error(err);
+                }
+            };
+            reader.readAsText(file);
+            e.target.value = ''; // Reset input
+        }
+
+        function loadPalette(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+                try {
+                    const loaded = JSON.parse(evt.target.result);
+                    if(Array.isArray(loaded)) {
+                        drawState.recentColors = loaded;
+                        renderRecentColors();
+                        alert("調色盤讀取成功！");
+                    } else {
+                        alert("格式錯誤：不是有效的調色盤陣列");
+                    }
+                } catch(err) {
+                    alert("讀取失敗");
+                }
+            };
+            reader.readAsText(file);
+            e.target.value = '';
+        }
+
+
+        // --- 事件綁定 ---
+        function bindEvents() {
+            ui.btns.fill.onclick = () => setTool('fill');
+            ui.btns.line.onclick = () => setTool('line');
+            ui.btns.eraser.onclick = () => setTool('eraser');
+
+            const refresh = () => {
+                config.sizeMm = parseInt(ui.inputs.sizeMm.value);
+                config.rows = parseInt(ui.inputs.rows.value);
+                config.cols = parseInt(ui.inputs.cols.value);
+                rebuildGraph();
+                draw();
+            };
+            ui.inputs.sizeMm.onchange = refresh;
+            ui.inputs.rows.onchange = refresh;
+            ui.inputs.cols.onchange = refresh;
+            
+            ui.inputs.gridType.forEach(r => r.addEventListener('change', (e) => {
+                config.gridType = e.target.value;
+                data.filled = {}; data.lines = [];
+                refresh();
+            }));
+
+            ui.inputs.showNodes.onchange = () => draw();
+            ui.inputs.bg.oninput = (e) => container.style.backgroundColor = e.target.value;
+
+            ui.inputs.color.onchange = (e) => {
+                drawState.color = e.target.value;
+                document.getElementById('colorHex').innerText = e.target.value.toUpperCase();
+            };
+            ui.inputs.width.onchange = (e) => drawState.lineWidth = parseInt(e.target.value);
+            ui.inputs.style.onchange = (e) => drawState.lineStyle = e.target.value;
+
+            ui.btns.export.onclick = exportImage;
+            ui.btns.clear.onclick = () => {
+                if(confirm("確定要清空所有內容嗎？")) {
+                    data.filled = {};
+                    data.lines = [];
+                    draw();
+                }
+            };
+
+            // Save/Load Handlers
+            ui.btns.saveProj.onclick = saveProject;
+            ui.btns.savePal.onclick = savePalette;
+            ui.btns.loadProj.onclick = () => ui.files.project.click();
+            ui.btns.loadPal.onclick = () => ui.files.palette.click();
+            ui.files.project.onchange = loadProject;
+            ui.files.palette.onchange = loadPalette;
+
+            // Mouse Events
+            canvas.addEventListener('wheel', (e) => {
+                e.preventDefault();
+                const zoomIntensity = 0.1;
+                const wPos = getWorldPos(e);
+                if (e.deltaY < 0) view.scale *= (1 + zoomIntensity);
+                else view.scale *= (1 - zoomIntensity);
+                view.scale = Math.max(0.1, Math.min(view.scale, 5));
+                view.offsetX = wPos.mx - wPos.x * view.scale;
+                view.offsetY = wPos.my - wPos.y * view.scale;
+                draw();
+            }, { passive: false });
+
+            canvas.addEventListener('mousedown', (e) => {
+                const wPos = getWorldPos(e);
+                view.lastMouseX = wPos.mx;
+                view.lastMouseY = wPos.my;
+                
+                if (e.button === 2 || e.button === 1) { 
+                    view.isPanning = true;
+                    container.style.cursor = 'grabbing';
+                } else if (e.button === 0) { 
+                    if (drawState.tool === 'fill') {
+                        drawState.isDrawing = true;
+                        drawState.lastDraggedCellKey = null;
+                        handleToolAction(wPos.x, wPos.y, false); 
+                    } else {
+                        handleToolAction(wPos.x, wPos.y, false);
+                    }
+                }
+            });
+
+            window.addEventListener('mouseup', () => {
+                view.isPanning = false;
+                drawState.isDrawing = false;
+                drawState.lastDraggedCellKey = null;
+                container.style.cursor = drawState.tool === 'eraser' ? 'not-allowed' : 'default';
+            });
+
+            canvas.addEventListener('mousemove', (e) => {
+                const wPos = getWorldPos(e);
+                if (view.isPanning) {
+                    view.offsetX += (wPos.mx - view.lastMouseX);
+                    view.offsetY += (wPos.my - view.lastMouseY);
+                    view.lastMouseX = wPos.mx;
+                    view.lastMouseY = wPos.my;
+                    draw();
+                } else {
+                    if (drawState.isDrawing && drawState.tool === 'fill') {
+                        handleToolAction(wPos.x, wPos.y, true);
+                    } else if (drawState.tool === 'line') {
+                        const nearest = findNearestNode(wPos.x, wPos.y);
+                        const oldKey = drawState.hoverNodeKey;
+                        drawState.hoverNodeKey = nearest ? nearest.key : null;
+                        if (oldKey !== drawState.hoverNodeKey) draw();
+                    }
+                }
+            });
+
+            canvas.addEventListener('contextmenu', e => e.preventDefault());
+        }
+
+        function renderRecentColors() {
+            ui.panels.recentColors.innerHTML = '';
+            drawState.recentColors.forEach(c => {
+                const div = document.createElement('div');
+                div.className = 'color-swatch';
+                div.style.backgroundColor = c;
+                div.onclick = () => {
+                    drawState.color = c;
+                    ui.inputs.color.value = c;
+                    document.getElementById('colorHex').innerText = c.toUpperCase();
+                };
+                ui.panels.recentColors.appendChild(div);
+            });
+        }
+
+        init();
+    </script>
+</body>
+</html>
